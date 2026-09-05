@@ -108,3 +108,8 @@ def render_success(attempt: int):
             border_style="green",
         )
     )
+
+
+def render_synthesized_tests(test_code: str):
+    syntax = Syntax(test_code, "python", theme="monokai", line_numbers=True)
+    console.print(Panel(syntax, title="[magenta]🧪 Synthesized Verification Suite[/magenta]", border_style="magenta"))

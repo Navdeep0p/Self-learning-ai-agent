@@ -8,6 +8,7 @@ from agent.executor import run_code_in_sandbox
 from agent.llm import generate_code_solution
 from agent.memory import EpisodicMemory
 from agent.reflector import reflect_and_repair
+from agent.tester import synthesize_test_harness
 from agent.ui import (
     console,
     render_ast_warning,
@@ -18,6 +19,7 @@ from agent.ui import (
     render_failure,
     render_memory_injection,
     render_success,
+    render_synthesized_tests,
     render_task_header,
 )
 from agent.validator import repair_syntax, validate_syntax
@@ -97,41 +99,38 @@ def run_learning_agent(task_data: dict, max_attempts: int = 3) -> bool:
     return False
 
 
-def interactive_mode():
-    console.rule("[bold cyan]SELF-LEARNING AGENT: INTERACTIVE REPL[/bold cyan]", style="cyan")
-    console.print("[dim]Enter multi-line input. Submit with an empty line or Ctrl+D.[/dim]\n")
-
-    console.print("[bold yellow]1. Function / Task Specification:[/bold yellow]")
+def read_multiline_block(prompt_label: str) -> str:
+    console.print(f"\n[bold yellow]{prompt_label}[/bold yellow]")
+    console.print("[dim](Paste content. Type 'END' on a new line or press Ctrl+D to submit)[/dim]")
     lines = []
     while True:
         try:
             line = input()
-            if not line and lines:
+            if line.strip() == "END":
                 break
             lines.append(line)
         except EOFError:
             break
+    return "\n".join(lines).strip()
 
-    task_prompt = "\n".join(lines).strip()
+
+def interactive_mode(auto_synthesize_tests: bool = False):
+    console.rule("[bold cyan]SELF-LEARNING AGENT: INTERACTIVE REPL[/bold cyan]", style="cyan")
+
+    task_prompt = read_multiline_block("1. Function / Task Specification:")
     if not task_prompt:
         console.print("[red]Task prompt cannot be empty.[/red]")
         sys.exit(0)
 
-    console.print("\n[bold yellow]2. Test Harness / Assertions:[/bold yellow]")
-    harness_lines = []
-    while True:
-        try:
-            line = input()
-            if not line and harness_lines:
-                break
-            harness_lines.append(line)
-        except EOFError:
-            break
-
-    test_harness = "\n".join(harness_lines).strip()
-    if not test_harness:
-        console.print("[red]Test harness cannot be empty.[/red]")
-        sys.exit(0)
+    if auto_synthesize_tests:
+        with console.status("[bold magenta]Synthesizing verification suite from specifications...", spinner="dots"):
+            test_harness = synthesize_test_harness(task_prompt)
+        render_synthesized_tests(test_harness)
+    else:
+        test_harness = read_multiline_block("2. Test Harness / Assertions:")
+        if not test_harness:
+            console.print("[red]Test harness cannot be empty.[/red]")
+            sys.exit(0)
 
     task_payload = {
         "id": "interactive_session",
@@ -144,10 +143,11 @@ def interactive_mode():
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Autonomous Self-Learning Coding Agent")
     parser.add_argument("--interactive", "-i", action="store_true", help="Launch interactive REPL mode")
+    parser.add_argument("--auto-test", "-a", action="store_true", help="Automatically synthesize test harnesses in REPL")
     args = parser.parse_args()
 
     if args.interactive:
-        interactive_mode()
+        interactive_mode(auto_synthesize_tests=args.auto_test)
     else:
         for task in BENCHMARK_TASKS:
             run_learning_agent(task)
