@@ -1,41 +1,60 @@
 from agent.executor import run_code_in_sandbox
 from agent.llm import generate_code_solution
+from agent.reflector import reflect_and_repair
 
 
-def run_phase1(task: str):
+def run_reflexion_pipeline(task: str, max_attempts: int = 3):
     print("=" * 70)
-    print("PHASE 1: BASE REACT TRIAL")
+    print("PHASE 2: REFLEXION CYCLE (SELF-CORRECTION LOOP)")
     print(f"TASK: {task}")
     print("=" * 70)
 
-    # 1. Generate code
-    print("\n[Step 1] Querying local model for solution...")
-    code = generate_code_solution(task)
+    # 1. Initial Generation
+    print("\n[Attempt 1/3] Generating initial solution...")
+    current_code = generate_code_solution(task)
 
-    print("\n--- GENERATED PYTHON SCRIPT ---")
-    print(code)
-    print("-" * 31)
+    for attempt in range(1, max_attempts + 1):
+        print(f"\n--- TRIAL RUN {attempt}/{max_attempts} ---")
+        passed, output = run_code_in_sandbox(current_code)
 
-    # 2. Execute in isolated sandbox
-    print("\n[Step 2] Executing in isolated subprocess sandbox...")
-    passed, output = run_code_in_sandbox(code)
+        if passed:
+            print(f"\n[+] SUCCESS: Problem resolved on attempt {attempt}!")
+            print(f"[+] Stdout:\n{output}")
+            return {
+                "success": True,
+                "attempts_used": attempt,
+                "final_code": current_code,
+            }
 
-    # 3. Output result
-    print("\n[Step 3] Verification Outcome:")
-    if passed:
-        print("[SUCCESS] All assertions passed!")
-        print(f"Stdout:\n{output}")
-    else:
-        print("[FAILED] Code encountered an error or failed assertions.")
-        print(f"Stderr / Diagnostics:\n{output}")
+        print(f"[-] FAILED on attempt {attempt}.")
+        print(f"[-] Error Traceback:\n{output}")
 
-    return passed
+        if attempt < max_attempts:
+            print(f"\n[Reflector] Analyzing error log and generating fix...")
+            diagnosis, current_code = reflect_and_repair(
+                task=task,
+                failed_code=current_code,
+                error_log=output
+            )
+            print(f"[Diagnosis]: {diagnosis}")
+        else:
+            print(f"\n[!] Maximum attempts ({max_attempts}) exhausted without passing tests.")
+
+    return {
+        "success": False,
+        "attempts_used": max_attempts,
+        "final_code": current_code,
+    }
 
 
 if __name__ == "__main__":
-    sample_task = (
-        "Write a function `flatten(lst: list) -> list` that flattens arbitrary levels "
-        "of nested lists into a single flat list of integers. "
-        "Include assert statements for empty lists, single values, and mixed depths."
+    test_task = (
+        "Write a function `run_length_encode(text: str) -> str` that performs "
+        "basic run-length compression (e.g., 'aaabbc' -> 'a3b2c1'). "
+        "Edge cases to handle with asserts:\n"
+        "1. Empty string should return empty string ''.\n"
+        "2. Single characters (e.g., 'a' -> 'a1').\n"
+        "3. Case sensitivity matters ('aA' -> 'a1A1').\n"
+        "Include comprehensive assert statements checking each rule and print 'ALL TESTS PASSED'."
     )
-    run_phase1(sample_task)
+    run_reflexion_pipeline(test_task, max_attempts=3)
