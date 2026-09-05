@@ -45,9 +45,9 @@ def run_learning_agent(task_data: dict, max_attempts: int = 3):
             print(f"[+] PASSED on attempt {attempt}!")
             if attempt > 1 and last_diagnosis:
                 memory.save_lesson(
-                    task=task_desc,
-                    mistake=last_diagnosis,
-                    lesson=f"For {task_data['id']}: {last_diagnosis}",
+                 task=task_desc,
+                 mistake=last_diagnosis,
+                 lesson=last_diagnosis,  # Pure, reusable invariant
                 )
             return True
 
