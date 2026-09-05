@@ -2,23 +2,27 @@ import subprocess
 import sys
 
 
-def run_code_in_sandbox(code: str, timeout: int = 5) -> tuple[bool, str]:
+def run_code_in_sandbox(code: str, timeout_seconds: int = 15) -> tuple[bool, str]:
     """
-    Executes a Python code string in an isolated subprocess.
-    Returns (success: bool, stdout_or_stderr: str).
+    Executes code in an isolated Python subprocess.
+    Returns (True, stdout) on success, or (False, stderr/stdout) on failure.
     """
     try:
-        result = subprocess.run(
+        proc = subprocess.run(
             [sys.executable, "-c", code],
             capture_output=True,
             text=True,
-            timeout=timeout,
+            timeout=timeout_seconds,
         )
-        if result.returncode == 0:
-            return True, result.stdout.strip()
+
+        if proc.returncode == 0:
+            return True, proc.stdout
         else:
-            return False, result.stderr.strip()
+            # Capture both stderr and stdout in case assertions print extra info
+            error_output = proc.stderr if proc.stderr else proc.stdout
+            return False, error_output.strip()
+
     except subprocess.TimeoutExpired:
-        return False, f"TimeoutError: Execution exceeded {timeout} seconds limit (infinite loop prevention)."
-    except Exception as exc:
-        return False, f"ExecutionError: {str(exc)}"
+        return False, f"TimeoutError: Execution exceeded {timeout_seconds} seconds."
+    except Exception as e:
+        return False, f"ExecutionError: {str(e)}"

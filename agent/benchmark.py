@@ -68,12 +68,13 @@ print("ALL TESTS PASSED")
     {
         "id": "task_5_simple_eval",
         "task": (
-            "Write a function `evaluate_expression(s: str) -> int` that evaluates a basic arithmetic string expression containing non-negative integers, '+', '-', '*', and '/'.\n"
+            "Write a function `evaluate_expression(s: str) -> int` that evaluates a basic arithmetic expression containing non-negative integers, '+', '-', '*', and '/'.\n"
             "Rules:\n"
             "1. Standard operator precedence applies ('*' and '/' before '+' and '-').\n"
-            "2. Division must truncate toward zero (e.g., 3/2 = 1, -3/2 = -1).\n"
-            "3. Do NOT use Python's built-in `eval()` or `exec()`.\n"
-            "4. Spaces may appear throughout the expression.\n"
+            "2. Maintain an integer number stack: push positive numbers for '+', push negative numbers for '-', and pop to compute immediately for '*' and '/'.\n"
+            "3. Division must truncate toward zero (use `int(a / b)` in Python, not floor `//`).\n"
+            "4. Return the sum of the stack at the end.\n"
+            "5. Do NOT use `eval()` or `exec()`.\n"
             "Include function definition and imports only."
         ),
         "test_harness": """

@@ -2,6 +2,7 @@ import json
 import math
 import os
 import requests
+from agent.llm import call_llm
 
 MEMORY_FILE = "agent_memory.json"
 OLLAMA_EMBED_URL = "http://localhost:11434/api/embeddings"
@@ -49,15 +50,47 @@ class EpisodicMemory:
                 return []
         return []
 
-    def save_lesson(self, task: str, mistake: str, lesson: str):
-        # Generate semantic vector for the task concept
-        embedding = get_embedding(task)
+    def _consolidate_rules(self, old_rule: str, new_rule: str) -> str:
+        """Merges two semantically overlapping heuristics into a single actionable invariant."""
+        prompt = f"""You are a knowledge consolidation engine for an autonomous coding agent.
+Two similar programming rules have been identified. Synthesize them into a single, concise (1 sentence), high-signal coding invariant.
 
-        # Deduplication check using semantic similarity (>0.95 means identical meaning)
-        for mem in self.memories:
-            if "embedding" in mem and cosine_similarity(mem["embedding"], embedding) > 0.95:
+RULE A: {old_rule}
+RULE B: {new_rule}
+
+CONSOLIDATED INVARIANT:"""
+        consolidated = call_llm(prompt).strip().split("\n")[0]
+        # Clean formatting
+        return consolidated.replace("`", "").strip()
+
+    def save_lesson(self, task: str, mistake: str, lesson: str):
+        embedding = get_embedding(task)
+        if not embedding:
+            return
+
+        # Check existing memories for semantic similarity
+        for idx, mem in enumerate(self.memories):
+            stored_vector = mem.get("embedding", [])
+            sim = cosine_similarity(stored_vector, embedding)
+
+            # Case 1: Near-identical task/invariant -> Skip storing duplicate
+            if sim > 0.94:
                 return
 
+            # Case 2: Closely related problem domain -> Consolidate into a stronger rule
+            if sim >= 0.80:
+                print(f"[Memory] Consolidating overlapping heuristic into Rule #{mem['id']}...")
+                merged_rule = self._consolidate_rules(mem["lesson"], lesson)
+                mem["lesson"] = merged_rule
+                mem["task"] = f"{mem['task']}\nRelated: {task.strip()}"
+                mem["embedding"] = get_embedding(mem["lesson"])
+
+                with open(self.file_path, "w", encoding="utf-8") as f:
+                    json.dump(self.memories, f, indent=2)
+                print(f"[Memory] Updated Rule #{mem['id']}: {merged_rule}")
+                return
+
+        # Case 3: Distinct task -> Store as fresh memory
         entry = {
             "id": len(self.memories) + 1,
             "task": task.strip(),
@@ -67,7 +100,6 @@ class EpisodicMemory:
         }
         self.memories.append(entry)
 
-        # Save to disk
         with open(self.file_path, "w", encoding="utf-8") as f:
             json.dump(self.memories, f, indent=2)
         print(f"[Memory] Stored vector-indexed rule #{entry['id']} to {self.file_path}")
@@ -85,10 +117,8 @@ class EpisodicMemory:
         for mem in self.memories:
             stored_vector = mem.get("embedding", [])
             sim = cosine_similarity(query_vector, stored_vector)
-            # Only match if they are truly in the same conceptual domain
             if sim >= threshold:
                 scored.append((sim, mem["lesson"]))
 
-        # Sort highest similarity first
         scored.sort(key=lambda x: x[0], reverse=True)
         return [item[1] for item in scored[:top_k]]
