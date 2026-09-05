@@ -3,6 +3,17 @@
 
 An autonomous, self-learning Python coding agent that implements recursive reflection (*Reflexion*), zero-cost AST pre-validation, vector-indexed episodic memory, and oracle-driven test synthesis. Built to run locally via Ollama with local open-weights models (`qwen2.5-coder:7b` and `nomic-embed-text`).
 
+<p align="center">
+  <img src="assets/demo.png" alt="Self-Learning Coding Agent Terminal UI" width="850">
+</p>
+
+<p align="center">
+  <img src="https://img.shields.io/badge/Python-3.10%2B-blue?logo=python" alt="Python 3.10+">
+  <img src="https://img.shields.io/badge/Ollama-Local_LLM-orange?logo=ollama" alt="Ollama">
+  <img src="https://img.shields.io/badge/UI-Rich_TUI-1081c2" alt="Rich TUI">
+  <img src="https://img.shields.io/badge/License-MIT-green" alt="License">
+</p>
+
 ---
 
 ## Key Capabilities
@@ -18,60 +29,26 @@ An autonomous, self-learning Python coding agent that implements recursive refle
 
 ## System Architecture
 
-
-
-```
-                   ┌────────────────────────────┐
-                   │   Task Specification       │
-                   └─────────────┬──────────────┘
-                                 │
-                                 ▼
-                 ┌───────────────────────────────┐
-                 │ Episodic Memory Retrieval     │
-                 │ (nomic-embed-text + Cosine)   │
-                 └───────────────┬───────────────┘
-                                 │ [Injected Invariants]
-                                 ▼
-                 ┌───────────────────────────────┐
-                 │ Code Synthesis                │
-                 │ (qwen2.5-coder:7b)            │
-                 └───────────────┬───────────────┘
-                                 │
-                                 ▼
-                 ┌───────────────────────────────┐
-                 │ AST Pre-Validation Guard      │◄───┐ (Zero-Cost
-                 │ (ast.parse in-memory check)   │────┘  Syntax Fix)
-                 └───────────────┬───────────────┘
-                                 │ [Syntactically Valid AST]
-                                 ▼
-                 ┌───────────────────────────────┐
-                 │ Subprocess Execution Sandbox  │
-                 │ (Candidate Code + Test Suite) │
-                 └───────────────┬───────────────┘
-                                 │
-                     ┌───────────┴───────────┐
-                     │                       │
-              [Assertions Pass]       [Assertion / Runtime Error]
-                     │                       │
-                     ▼                       ▼
-        ┌────────────────────────┐  ┌────────────────────────┐
-        │ Success & Memory Store │  │ Reflexion Diagnostic   │
-        │ (Consolidate Lessons)  │  │ & Unified Patch Diff   │
-        └────────────────────────┘  └────────────┬───────────┘
-                                                 │
-                                                 └───► (Loop back to AST / Sandbox)
+```mermaid
+flowchart TD
+    A[Task Specification] --> B[Vector Episodic Memory\nnomic-embed-text + Cosine]
+    B -->|Injected Invariants| C[Code Synthesis\nqwen2.5-coder:7b]
+    C --> D{AST Guard\nast.parse}
+    D -->|Syntax Error| E[In-Memory AST Repair]
+    E --> D
+    D -->|Valid AST| F[Subprocess Sandbox Execution\nCandidate Code + Test Suite]
+    F -->|Assertions Pass| G[Memory Store\nConsolidate Invariant]
+    F -->|Assertion / Runtime Failure| H[Reflexion Engine\nDiagnostic & Unified Diff]
+    H -->|Patched Code| D
 
 ```
-
 
 
 ---
 
 ## Project Structure
 
-
 ```
-
 .
 ├── agent/
 │   ├── benchmark.py       # Standardized evaluation benchmark suite
@@ -96,9 +73,8 @@ An autonomous, self-learning Python coding agent that implements recursive refle
 
 1. **Python 3.10+**
 2. **Ollama** installed and running locally:
-   ```bash
-   ollama serve
-
+```bash
+ollama serve
 ```
 
 3. Pull the required models:
@@ -192,4 +168,4 @@ python test_generalization.py
 
 ## 📄 License
 
-MIT License. Free to use, adapt, and build upon.
+MIT License [LICENSE](LICENSE). Free to use, adapt, and build upon.
