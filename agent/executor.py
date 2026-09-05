@@ -4,9 +4,8 @@ import sys
 
 def run_code_in_sandbox(code: str, timeout: int = 5) -> tuple[bool, str]:
     """
-    Executes a Python code string in a fresh, isolated subprocess.
-    Returns:
-        (success: bool, output: str)
+    Executes a Python code string in an isolated subprocess.
+    Returns (success: bool, stdout_or_stderr: str).
     """
     try:
         result = subprocess.run(

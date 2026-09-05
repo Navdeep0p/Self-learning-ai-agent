@@ -1,60 +1,65 @@
+import time
 from agent.executor import run_code_in_sandbox
 from agent.llm import generate_code_solution
 from agent.reflector import reflect_and_repair
+from agent.memory import EpisodicMemory
+from agent.benchmark import BENCHMARK_TASKS
+
+memory = EpisodicMemory()
 
 
-def run_reflexion_pipeline(task: str, max_attempts: int = 3):
+def run_learning_agent(task_data: dict, max_attempts: int = 3):
+    task_desc = task_data["task"]
+    test_harness = task_data["test_harness"]
+
+    print("\n" + "=" * 70)
+    print(f"EVALUATING: {task_data['id']}")
     print("=" * 70)
-    print("PHASE 2: REFLEXION CYCLE (SELF-CORRECTION LOOP)")
-    print(f"TASK: {task}")
-    print("=" * 70)
 
-    # 1. Initial Generation
-    print("\n[Attempt 1/3] Generating initial solution...")
-    current_code = generate_code_solution(task)
+    # 1. Memory retrieval
+    past_lessons = memory.retrieve_relevant_lessons(task_desc)
+    if past_lessons:
+        print(f"[Memory] Injected {len(past_lessons)} stored rule(s):")
+        for idx, rule in enumerate(past_lessons, 1):
+            print(f"  {idx}. {rule}")
 
+    # 2. Initial generation
+    print("\n[Attempt 1] Generating function...")
+    candidate_code = generate_code_solution(task_desc, past_lessons=past_lessons)
+
+    last_diagnosis = ""
     for attempt in range(1, max_attempts + 1):
-        print(f"\n--- TRIAL RUN {attempt}/{max_attempts} ---")
-        passed, output = run_code_in_sandbox(current_code)
+        print(f"--- RUN {attempt}/{max_attempts} ---")
+        # Combine candidate code with evaluation harness
+        full_executable = candidate_code + "\n\n" + test_harness
+        passed, output = run_code_in_sandbox(full_executable)
 
         if passed:
-            print(f"\n[+] SUCCESS: Problem resolved on attempt {attempt}!")
-            print(f"[+] Stdout:\n{output}")
-            return {
-                "success": True,
-                "attempts_used": attempt,
-                "final_code": current_code,
-            }
+            print(f"[+] PASSED on attempt {attempt}!")
+            if attempt > 1 and last_diagnosis:
+                memory.save_lesson(
+                    task=task_desc,
+                    mistake=last_diagnosis,
+                    lesson=f"For {task_data['id']}: {last_diagnosis}"
+                )
+            return True
 
         print(f"[-] FAILED on attempt {attempt}.")
-        print(f"[-] Error Traceback:\n{output}")
+        print(f"[-] Error: {output}")
 
         if attempt < max_attempts:
-            print(f"\n[Reflector] Analyzing error log and generating fix...")
-            diagnosis, current_code = reflect_and_repair(
-                task=task,
-                failed_code=current_code,
+            print("[Reflector] Repairing code against failed assertion...")
+            last_diagnosis, candidate_code = reflect_and_repair(
+                task=task_desc,
+                failed_code=candidate_code,
                 error_log=output
             )
-            print(f"[Diagnosis]: {diagnosis}")
-        else:
-            print(f"\n[!] Maximum attempts ({max_attempts}) exhausted without passing tests.")
+            print(f"[Diagnosis]: {last_diagnosis}")
 
-    return {
-        "success": False,
-        "attempts_used": max_attempts,
-        "final_code": current_code,
-    }
+    return False
 
 
 if __name__ == "__main__":
-    test_task = (
-        "Write a function `run_length_encode(text: str) -> str` that performs "
-        "basic run-length compression (e.g., 'aaabbc' -> 'a3b2c1'). "
-        "Edge cases to handle with asserts:\n"
-        "1. Empty string should return empty string ''.\n"
-        "2. Single characters (e.g., 'a' -> 'a1').\n"
-        "3. Case sensitivity matters ('aA' -> 'a1A1').\n"
-        "Include comprehensive assert statements checking each rule and print 'ALL TESTS PASSED'."
-    )
-    run_reflexion_pipeline(test_task, max_attempts=3)
+    for task in BENCHMARK_TASKS:
+        run_learning_agent(task)
+        time.sleep(3)  # Allows passive thermal dissipation between inference calls
